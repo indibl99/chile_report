@@ -22,6 +22,8 @@ import fileinput
 import warnings
 import pickle as pl
 from distutils.dir_util import copy_tree
+from scipy.optimize import curve_fit
+
 
 def func(x, a, x0, sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
@@ -44,6 +46,13 @@ def tripleErrFunc(guess, xData, yData):
     yFit = triple_gaussian(xData, guess[0], guess[1], guess[2], guess[3], guess[4], guess[5], guess[6], guess[7], guess[8])
     err3 = yData - yFit
     return err3
+
+def composite_spectrum(x, y, # data
+                       a, b, # linear baseline
+                       a1, x01, sigma1, # 1st line
+                       a2, x02, sigma2): # 2d line
+    return (x*a + b + func(x, a1, x01, sigma1)
+                    + func(x, a2, x02, sigma2))
 
 def parse_datafile(base):
     #parsing STARLIGHT output
@@ -75,14 +84,15 @@ def parse_datafile(base):
     starData = [fobs, SN]
     return starData
 
-def loadData(filename, fobs, outLoc):
-    loc = filename
+def loadData(base):
+    #loc = filename
     #filename = '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications_final/load_individual/spec-0266-51630-0022_in/spec-0266-51630-0022_parsed.txt'
-    spec = np.genfromtxt(filename)
+    loc = '/Users/plira/india_temp/variable_spectra/auto/stacking/test_dir/' + base + '/' + base + '_parsed.txt'
+    spec = np.genfromtxt(loc)
     
     wave = spec[:,0]
-    inSpec = fobs*spec[:,1]
-    outSpec = fobs*spec[:,2]
+    inSpec = spec[:,1]
+    outSpec = spec[:,2]
     subSpec = inSpec - outSpec
 
    #plot observed spectrum, STARLIGHT model, subtracted model
@@ -101,7 +111,7 @@ def loadData(filename, fobs, outLoc):
     plt.grid(c='k', linestyle='-', linewidth=1.0, alpha=0.25)
     plt.xlabel("wavelength (angstroms)")
     plt.ylabel("flux")
-    title = "Spectrum and Subtracted STARLIGHT Model of \n" + filename
+    title = "Spectrum and Subtracted STARLIGHT Model of \n" + base
     plt.title(title)
     plt.plot(wave, inSpec, c='k', linewidth=0.4)
     plt.plot(wave, outSpec, c='r', linewidth=0.4)
@@ -127,18 +137,18 @@ def loadData(filename, fobs, outLoc):
     plt.vlines(6736, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
     plt.text(6736, 28, "SII (6736)")
 
-    m.savefig(outLoc + 'starlight_model.png',bbox_inches='tight')
+    #m.savefig(outLoc + 'starlight_model.png',bbox_inches='tight')
     m.show()
-    m.savefig(outLoc + 'starlight_model.png',bbox_inches='tight')
+    #m.savefig(outLoc + 'starlight_model.png',bbox_inches='tight')
     
 
     OutData = namedtuple('outData', 'wave inSpec outSpec subSpec')
     data = OutData(wave, inSpec, outSpec, subSpec)
     return data
 
-def gaussianFits(fileName, fobs, outLoc, SN):
+def gaussianFits(fileName):
 
-    data = loadData(fileName, fobs, outLoc)
+    data = loadData(fileName)
     x = data.wave[1349:] #could also write as hAregion[:,0]
     y = data.subSpec[1349:]
     width = 3.0 #know this from experience 
@@ -276,41 +286,13 @@ def gaussianFits(fileName, fobs, outLoc, SN):
     #note: OI is usually so small, indexes probably won't pick it up
     tooNoisy = False
   
-    """if numPeaks2==5:
-        ampNII0 = peakY[peakIndices2[0]]
-        amphA = peakY[peakIndices2[1]]
-        ampNII = peakY[peakIndices2[2]]
-        ampSIIa = peakY[peakIndices2[3]]
-        ampSIIb = peakY[peakIndices2[4]]
-    elif numPeaks2==4:
-        ampNII0 = noise #placeholder because you need to do a triple gaussian fit 
-        amphA = peakY[peakIndices2[0]]
-        ampNII = peakY[peakIndices2[1]]
-        ampSIIa = peakY[peakIndices2[2]]
-        ampSIIb = peakY[peakIndices2[3]]
-    if numPeaks2 < 3 or numPeaks2 > 9:
-        tooNoisy = True
-        print("too few peaks detected, check this spectra by hand")
-    elif numPeaks2 > 25:
-        tooNoisy = True
-        print("too many peaks detected, check this spectra by hand")"""
-
-    """if numPeaks1==2:
-        amphB = peakY[peakIndices1[0]]
-        ampOIII = peakY[peakIndices1[1]]
-        ampOI = noise #this is just a place holder for now, means that .indexes couldn't find a peak at OI
-    elif numPeaks1==3: #note! need to take care of uncertainties 
-        amphB = peakY[peakIndices1[0]]
-        ampOIII = peakY[peakIndices1[1]]
-        ampOI = peakY[peakIndices1[2]]"""
     if numPeaks1 < 1: #NOT LESS THAN TWO (gets rid of cases where H-b is visible but not O3, which happens a lot)
-        #tooNoisy = True
         print("too few peaks detected, check this spectra by hand")
-    #if hAisClear==False: tooNoisy = True
-    #if SN < 13: tooNoisy = True
-    #if hBisClear==False and OIIIisClear==False: tooNoisy = True
     
-    if tooNoisy==False: 
+    if tooNoisy==False:
+
+        f = plt.figure(2, figsize=(16,5))
+        
         guesshB = [amphB, 4865, width]
         guessOIII = [ampOIII, 5007, width]
         guessOI = [ampOI, 6300, width]
@@ -358,7 +340,35 @@ def gaussianFits(fileName, fobs, outLoc, SN):
         
         optimhA, flag = sp.leastsq(errfunc, guesshA, args=(x,y))
         optimNII, flag = sp.leastsq(errfunc, guessNII, args=(x,y))
+
+        #TRYING TO FIND A BLR FOR HA
         
+        ampBLR = 0.8
+        guessBLR = [ampBLR, 6564, 10, amphA, 6564, width]
+        optimBLR, flag = sp.leastsq(doubleErrFunc, guessBLR, args=(x, y))
+        yBLR = double_gaussian(x, optimBLR[0], optimBLR[1], optimBLR[2], optimBLR[3], optimBLR[4], optimBLR[5])
+        yBLRbroad = func(x, optimBLR[0], optimBLR[1], optimBLR[2])
+        yBLRhA = func(x, optimBLR[3], optimBLR[4], optimBLR[5])
+
+        guess = [1, 0, 10, ampBLR, 6564, 5, amphA, 6564, width]
+
+        popt, pcov = curve_fit(composite_spectrum, x, y, p0 = guess)
+        #plt.plot(x, composite_spectrum(x, *popt), 'k', label='Total fit')
+        #plt.plot(x, func(x, *popt[-3:])+x*popt[0]+popt[1], c='r', label='Broad component')
+
+        guessBF = [0.5, 6564.5, 6]
+        yBF = func(x, guessBF[0], guessBF[1], guessBF[2])
+        yTest = y - yBF
+        
+        guessTest = [4.9, 6564.5, 3]
+        optimyTest, flag = sp.leastsq(errfunc, guessTest, args=(x,yTest))
+        yNew = func(x, optimyTest[0], optimyTest[1], optimyTest[2])
+
+        
+        #plt.plot(
+
+        
+    
         #now, calculating y-values and extracting each individual peak from multi-peak fit
         yNII0 = func(x, optimhANII[0], optimhANII[1], optimhANII[2])
         yhA = func(x, optimhANII[3], optimhANII[4], optimhANII[5])
@@ -401,8 +411,8 @@ def gaussianFits(fileName, fobs, outLoc, SN):
         if NII < 0: NIIisClear = False
         if SII < 0: SIIisClear = False
 
-        f = plt.figure(2, figsize=(16,5))
-        plt.clf()
+        #f = plt.figure(2, figsize=(16,5))
+        #plt.clf()
         plt.xlim(4700, 7000)
         plt.grid()
         plt.tight_layout()
@@ -411,21 +421,32 @@ def gaussianFits(fileName, fobs, outLoc, SN):
         plt.grid(c='k', linestyle='-', linewidth=1.0, alpha=0.25)
         plt.plot(x, y, c='k', linewidth=0.5)
         
-        plt.plot(x, yhB, c='c', linewidth=0.75)
-        plt.plot(x, yOIII, c='y', linewidth=0.75)
-        plt.plot(x, yOI, c='m', linewidth=0.75)
-        plt.plot(x, yhANII, c='b', lw=0.75)
+        plt.plot(x, yhB, c='b', linewidth=0.75)
+        plt.plot(x, yOIII, c='b', linewidth=0.75)
+        plt.plot(x, yOI, c='b', linewidth=0.75)
+        #plt.plot(x, yhANII, c='b', lw=0.75)
         #plt.plot(x, yhANII2, c='b', lw=0.75)
-        plt.plot(x, yhA, c='g', lw =0.75)
-        plt.plot(x, yNII0, c='y', lw =0.75)
-        plt.plot(x, yNII, c='g', lw =0.75)
+        #plt.plot(x, yhA, c='b', lw =0.75)
+        #plt.plot(x, yNII0, c='b', lw =0.75)
+        #plt.plot(x, yNII, c='b', lw =0.75)
         plt.plot(x, ySII, c='b', lw=0.75)
-        plt.plot(x, ySIIa, c='r', lw=0.75)
-        plt.plot(x, ySIIb, c='r', lw=0.75)
+        plt.plot(x, ySIIa, c='b', lw=0.75)
+        plt.plot(x, ySIIb, c='b', lw=0.75)
+
+        #plt.plot(x, yBLR, c ='b', lw = 0.75)
+        #plt.plot(x, yBLRbroad, c = 'b', lw=0.75)
+        #plt.plot(x, yBLRhA, c='b', lw=0.75)
+
+        plt.plot(x, yBF, c='g', lw=0.75)
+        #plt.plot(x, y - yBF, c ='m', lw =0.75)
+        plt.plot(x, yNew, c='g', lw=0.75)
+        plt.plot(x, yBF + yNew, c='r', lw=0.75)
+
+        plt.plot(x, y - yBF - yNew, c='#999999', lw=0.75)
         
-        f.savefig(outLoc + 'gaussian_fit.png', bbox_inches='tight')
+        #f.savefig(outLoc + 'gaussian_fit.png', bbox_inches='tight')
         f.show()
-        f.savefig(outLoc + 'gaussian_fit.png', bbox_inches='tight')
+        #f.savefig(outLoc + 'gaussian_fit.png', bbox_inches='tight')
         raw_input()
         
     elif tooNoisy==True:
@@ -436,7 +457,7 @@ def gaussianFits(fileName, fobs, outLoc, SN):
     return emLines #potential problem here! maybe it has to return something no matter what!
         
 
-def BPT(emLines, outLoc):
+def BPT(emLines):
 
     bptNII=  ''
     bptSII = ''
@@ -659,11 +680,11 @@ def BPT(emLines, outLoc):
     ax3.plot(np.log(OI/Halpha), np.log(OIII/Hbeta), marker='o', c=colorVarOI, markeredgecolor=colorVarOI)
     if allClear==False or allClearOI==False: ax3.quiver(np.log(OI/Halpha), np.log(OIII/Hbeta), flagX, flagY, color=colorVarOI)
     plt.tight_layout()
-    c.savefig(outLoc + 'BPT Diagrams', bbox_inches='tight')
+    #c.savefig(outLoc + 'BPT Diagrams', bbox_inches='tight')
     c.show()
-    c.savefig(outLoc + 'BPT Diagrams', bbox_inches='tight')
+    #c.savefig(outLoc + 'BPT Diagrams', bbox_inches='tight')
     
-    raw_input()
+    #raw_input()
     
     bptR = [bptNII, bptSII, bptOI, hAClear, NIIClear, hBClear, OIIIClear, SIIClear, OIClear]
     
@@ -679,8 +700,8 @@ def run_code():
     outpath = '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications_final/load_individual/'
     starlight = '/Users/plira/software/STARLIGHTv04/'
     oldFile = 'old'
-    totalFile = '/Users/plira/india_temp/variable_spectra/auto/temp_trash/cumulative_output_update.txt'
-    totalBPT = '/Users/plira/india_temp/variable_spectra/auto/temp_trash/cumulative_BPT_update.txt'
+    #totalFile = '/Users/plira/india_temp/variable_spectra/auto/temp_trash/cumulative_output_update.txt'
+    #totalBPT = '/Users/plira/india_temp/variable_spectra/auto/temp_trash/cumulative_BPT_update.txt'
     inputDir = '/Users/plira/india_temp/variable_spectra/auto/input_spectra/'
     classDir = '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications/'
 
@@ -728,60 +749,62 @@ def run_code():
     os.system("./Starlight_v04_Mac.exe < grid_auto.in") #:)"""
     #the way this is set up, if you just comment out the STARLIGHT section, it should run without running starlight? check that to be sure
     
-    starData = parse_datafile(base)
-    fobs = starData[0]
-    SN = starData[1]
+    #starData = parse_datafile(base)
+    #fobs = starData[0]
+    #SN = starData[1]
     
-    locI = outpath + base + '/'
-    locI =  '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications_final/load_individual/'
-    locO = '/Users/plira/india_temp/variable_spectra/auto/input_spectra/' + base + '.txt'
-    print(locI)
-    fileOut = open(locI + 'analysis_output', 'w')
-    print("locI: " + locI)
-    shutil.copy2(locO, locI)
-    shutil.copy2('/Users/plira/india_temp/variable_spectra/auto/starlight_models/'+base+'_output.txt', locI)
+    #locI = outpath + base + '/'
+    #locI =  '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications_final/load_individual/'
+    #locO = '/Users/plira/india_temp/variable_spectra/auto/input_spectra/' + base + '.txt'
+    #print(locI)
+    #fileOut = open(locI + 'analysis_output', 'w')
+    #print("locI: " + locI)
+    #shutil.copy2(locO, locI)
+    #shutil.copy2('/Users/plira/india_temp/variable_spectra/auto/starlight_models/'+base+'_output.txt', locI)
     #loc = outpath + base + '/' + base + '_parsed.txt' #this is the PARSED model that gets passed
 
-    loc = '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications_final/load_individual/spec-0476-52314-0590_in/spec-0476-52314-0590_parsed.txt'
+    #loc = '/Users/plira/india_temp/variable_spectra/auto/spectral_classifications_final/load_individual/spec-0476-52314-0590_in/spec-0476-52314-0590_parsed.txt'
+    #loc = input("please enter the dir of the raw data you want to display: ")
     
-    emLines = gaussianFits(loc, fobs, locI, SN);
+    emLines = gaussianFits(base);
     output = [base, emLines.hAlpha, emLines.NII, emLines.hBeta, emLines.OIII, emLines.SII, emLines.OI, emLines.noise, emLines.hAisClear, emLines.NIIisClear, emLines.hBisClear, emLines.OIIIisClear, emLines.SIIisClear, emLines.OIisClear, emLines.tooNoisy]
 
-    fileOut.write('UPDATED: Filename: '+ output[0])
-    fileOut.write('\n ')
-    fileOut.write("\n{: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15}".format('hAlpha','NII','hBeta','OIII','SII', 'OI', 'noise'))
-    fileOut.write("\n{: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15}".format(output[1], output[2], output[3], output[4], output[5], output[6], output[7]))
-    fileOut.write('\n ')
-    fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format('hAisClear','NIIisClear','hBisClear','OIIIisClear','SIIisClear','OIisClear','tooNoisy'))
-    fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format(output[8], output[9], output[10], output[11], output[12], output[13], output[14]))        
+    #fileOut.write('UPDATED: Filename: '+ output[0])
+    #fileOut.write('\n ')
+    #fileOut.write("\n{: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15}".format('hAlpha','NII','hBeta','OIII','SII', 'OI', 'noise'))
+    #fileOut.write("\n{: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15}".format(output[1], output[2], output[3], output[4], output[5], output[6], output[7]))
+    #fileOut.write('\n ')
+    #fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format('hAisClear','NIIisClear','hBisClear','OIIIisClear','SIIisClear','OIisClear','tooNoisy'))
+    #fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format(output[8], output[9], output[10], output[11], output[12], output[13], output[14]))        
 
     if emLines.tooNoisy==False:
+        print('...')
         #cumulative = open(totalFile, 'a')
-        bptO = BPT(emLines, locI)
-        fileOut.write('\n ')
-        fileOut.write("\n{: <15} {: <15} {: <15}".format('BPT NII', 'BPT SII', 'BPT OI'))
-        fileOut.write("\n{: <15} {: <15} {: <15}".format(bptO[0], bptO[1], bptO[2]))
+        #bptO = BPT(emLines)
+        #fileOut.write('\n ')
+        #fileOut.write("\n{: <15} {: <15} {: <15}".format('BPT NII', 'BPT SII', 'BPT OI'))
+        #fileOut.write("\n{: <15} {: <15} {: <15}".format(bptO[0], bptO[1], bptO[2]))
                     
         #cumulative.write("{: <15} {: <15} {: <15}".format(bptO[0], bptO[1], bptO[2]))
         #totalBPT.write('\n'+ str(output[0]) + ',' + str(output[1]) + ',' + str(output[2]) + ',' + str(output[3]) + ',' + str(output[4]) + ',' + str(output[5]) + ',' + str(output[6]) + ',' + str(output[7]) + ',' + str(output[8]) + ',' + str(output[9]) + ',' + str(output[10]) + ',' + str(output[11]) + ',' + str(output[12]) + ',' + str(output[13]) + ',' + str(output[14]))
-        fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format('hAisClear2','NIIisClear2','hBisClear2','OIIIisClear2','SIIisClear2','OIisClear2'))
-        fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format(bptO[3], bptO[4], bptO[5], bptO[6], bptO[7], bptO[8]))        
-        fileOut.close()
+        #fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format('hAisClear2','NIIisClear2','hBisClear2','OIIIisClear2','SIIisClear2','OIisClear2'))
+        #fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format(bptO[3], bptO[4], bptO[5], bptO[6], bptO[7], bptO[8]))        
+        #fileOut.close()
 
-        print('NII: ' + bptO[0])
-        print('SII: ' + bptO[1])
-        print('OI: ' + bptO[2])
+        #print('NII: ' + bptO[0])
+        #print('SII: ' + bptO[1])
+        #print('OI: ' + bptO[2])
 
-        update = open(totalBPT, 'r')
-        lines = update.readlines()
-        update.close()
-        update = open(totalBPT, 'w')
-        for line in lines:
-            params = line.split(',')
-            if params[0]!=base:
-                update.write(line)
-        update.write('\n'+ str(output[0]) + ',' + str(output[1]) + ',' + str(output[2]) + ',' + str(output[3]) + ',' + str(output[4]) + ',' + str(output[5]) + ',' + str(output[6]) + ',' + str(output[7]) + ',' + str(bptO[3]) +',' + str(bptO[4]) +',' + str(bptO[5]) + ',' + str(bptO[6]) + ',' + str(bptO[7]) + ',' + str(bptO[8]))        
-        update.close()                                                                 
+        #update = open(totalBPT, 'r')
+        #lines = update.readlines()
+        #update.close()
+        #update = open(totalBPT, 'w')
+        #for line in lines:
+        #   params = line.split(',')
+         #   if params[0]!=base:
+          #      update.write(line)
+        #update.write('\n'+ str(output[0]) + ',' + str(output[1]) + ',' + str(output[2]) + ',' + str(output[3]) + ',' + str(output[4]) + ',' + str(output[5]) + ',' + str(output[6]) + ',' + str(output[7]) + ',' + str(bptO[3]) +',' + str(bptO[4]) +',' + str(bptO[5]) + ',' + str(bptO[6]) + ',' + str(bptO[7]) + ',' + str(bptO[8]))        
+        #update.close()                                                                 
 
                      
         """copy_tree(outpath + base, classDir + 'NII/' + bptO[0] + '/' + base + '_update/')
@@ -792,10 +815,11 @@ def run_code():
             copy_tree(outpath + base, classDir + 'likely_AGN/' + '/' + base + '_update/')"""
         
     elif emLines.tooNoisy==True:
-        notWorthIt = open(locI + 'ErrorMessage_noisy_spectrum', 'w')
-        notWorthIt.write('spectrum was too noisy, please inspect file ' + base + '.txt by hand')
-        notWorthIt.close()
-        copy_tree(outpath + base, classDir + 'tooNoisy/' + base + '_update/')
+        #notWorthIt = open(locI + 'ErrorMessage_noisy_spectrum', 'w')
+        #notWorthIt.write('spectrum was too noisy, please inspect file ' + base + '.txt by hand')
+        #notWorthIt.close()
+        #copy_tree(outpath + base, classDir + 'tooNoisy/' + base + '_update/')
+        print("too Noisy...")
 
     #open(totalFile, 'a')
      

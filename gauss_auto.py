@@ -23,9 +23,6 @@ import fileinput
 import warnings
 import pickle as pl
 
-import random
-import time
-from matplotlib import animation
 
 def func(x, a, x0, sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
@@ -49,11 +46,10 @@ def tripleErrFunc(guess, xData, yData):
     err3 = yData - yFit
     return err3
 
-
 def parse_datafile(base, filename):
     #parsing STARLIGHT output
-    datapathIn = '/Users/plira/india_temp/variable_spectra/auto/starlight_models/' + base + '_output.txt'
-    datapathOut = '/Users/plira/india_temp/variable_spectra/auto/output_spectra/' + base + '/'
+    datapathIn = '/Users/plira/india_temp/variable_spectra/auto/temp_out/' + base + '_output.txt'
+    datapathOut = '/Users/plira/india_temp/variable_spectra/auto/output_models/' + base + '/'
     dataOut = datapathOut + base + '_parsed.txt'
 
     if os.path.exists(datapathOut):
@@ -67,17 +63,11 @@ def parse_datafile(base, filename):
                 temp = line.split(' ')
                 fobs = float(temp[0])
                 print("fobs: " + str(fobs))
-            if i == 31:
-                temp2 = line.strip().split()
-                print(temp2)
-                SN = float(temp2[0])
-                print("SN: " + str(SN))
             elif i >= 216:
                 starModel.writelines(line)    
-    starData = [fobs, SN]
-    return starData
+    return fobs
 
-def loadData(filename, fobs):
+def loadData(filename, fobs, outLoc):
     loc = filename
     spec = np.genfromtxt(filename)
     
@@ -87,84 +77,32 @@ def loadData(filename, fobs):
     subSpec = inSpec - outSpec
 
    #plot observed spectrum, STARLIGHT model, subtracted model
-    cmfont = {'fontname':'Georgia'}
-
-    #m = plt.figure(1, figsize=(15,5))
-    plt.rcParams.update(cmfont)
-    m, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 8))#3 subplots
-
-    #plt.clf()
-
-    peaks = indexes(inSpec, thres=0.3, min_dist=4.0)
-    peaksY = inSpec[peaks]
-    peaksY = peaksY[:2000]
-    yMax = np.amax(peaksY) + 30 #greater than 5500
-    print('yMax: ' + str(yMax))
-
-    for ax in [ax1, ax2]:
-        ax.grid()
-        ax = m.gca()
-        ax.set_xticks(np.arange(3500, 7700, 250))
-        ax.grid(linestyle='dotted')
-        ax.grid(c='k', linestyle='-', linewidth=1.0, alpha=0.25)
-    
-    title = "STARLIGHT Model and Subtracted Stellar Spectrum of ACO 2255"
-    plt.suptitle(title, **cmfont)
-    ax1.plot(wave, inSpec, c='k', linewidth=0.6)
-    ax1.plot(wave, outSpec, c='r', linewidth=0.6)
-    ax1.set_ylabel("flux", **cmfont)
-    ax1.set_xticks(np.arange(3500, 7700, 250))
-    ax1.grid(linestyle='dotted')
-    ax1.grid(c='k', linestyle='-', linewidth=1.0, alpha=0.25)
-    ax1.set_ylim(-20, yMax)
-    ax1.set_xlim(3700, 7700)
-
-    ax2.plot(wave, subSpec, c='b', linewidth=0.6)
-    ax2.set_xlabel("wavelength (angstroms)", **cmfont)
-    ax2.set_ylabel("flux", **cmfont)
-    ax2.set_ylim(-20, yMax)
-    ax2.set_xlim(3700, 7700)
-
-    #m.legend((inSpec, outSpec, subSpec), ('input spectrum', 'STARLIGHT model', 'subtracted spectrum'))
-    lines = [inSpec, outSpec, subSpec]
-    labels = ['input spectrum', 'STARLIGHT model', 'subtracted spectrum']
-    plt.figlegend(lines, labels, loc = 'upper right')
-
-
-
-    """
-
-    #plt.autoscale(enable=True, axis='y', tight=True)
-
-    plt.vlines(4861, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
-    plt.text(4861, 40, "H-beta (4861)")
-    plt.vlines(5007, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
-    plt.text(5007, 30, "OIII (5007)")
-
-    plt.vlines(6300, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
-    plt.text(6300, 30, "OI (6300)")
-
-    plt.vlines(6563, -20, yMax, colors='r', linewidth=2.0, alpha=0.5)
-    plt.text(6563, 50, "H-alpha (6563)")
-    plt.vlines(6583, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
-    plt.text(6583, 42, "NII (6583)")
-
-    plt.vlines(6716, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
-    plt.text(6716, 35, "SII (6716)")
-    plt.vlines(6736, -20, yMax, colors='r', linewidth=3.0, alpha=0.5)
-    plt.text(6736, 28, "SII (6736)")"""
-
-    #m.savefig(outLoc + 'sample_spectrum.png',bbox_inches='tight')
+    m = plt.figure(1, figsize=(15,5))
+    plt.clf()
+    plt.xlim(3500,7700)
+    plt.grid()
+    plt.grid(c='k', linestyle='-', linewidth=1.0, alpha=0.25)
+    plt.xlabel("wavelength (angstroms)")
+    plt.ylabel("flux")
+    title = "Spectrum and Subtracted STARLIGHT Model of \n" + filename
+    plt.title(title)
+    plt.plot(wave, inSpec, c='k', linewidth=0.4)
+    plt.plot(wave, outSpec, c='r', linewidth=0.4)
+    plt.plot(wave, subSpec, c='b', linewidth=0.4)
     m.show()
-    #raw_input()
-    data = [wave, subSpec]
+    m.savefig(outLoc + 'starlight_model.png',bbox_inches='tight')
+    #pickleloc = outLoc + 'starlight_model.pickle'
+    #pl.dump(m,file(pickleloc, 'wb'))
+
+    OutData = namedtuple('outData', 'wave inSpec outSpec subSpec')
+    data = OutData(wave, inSpec, outSpec, subSpec)
     return data
 
-def gaussianFits(fileName, fobs):
+def gaussianFits(fileName, fobs, outLoc):
 
-    data = loadData(fileName, fobs)
-    x = data[0] 
-    y = data[1]
+    data = loadData(fileName, fobs, outLoc)
+    x = data.wave #could also write as hAregion[:,0]
+    y = data.subSpec
     width = 3.0 #know this from experience 
     amphB = 0
     ampOIII = 0
@@ -174,18 +112,17 @@ def gaussianFits(fileName, fobs):
     ampNII0 = 0
     ampSIIa = 0
     ampSIIb = 0
-    xGuessSIIb = 6735
     
     #may need to make noise smarter soon - this is a test!!
     #NEED TO MAKE NOISE MUCH SMARTER
     noiseX = x[1450:1460]
     noiseY = y[1450:1460]
     
-    noise = np.abs(3 * integrate.simps(noiseY, noiseX))
+    noise = 3 * integrate.simps(noiseY, noiseX)
     
     #trying to fix the problem with the gaussian fits using peak utils indexes
     #automating guessing heights
-    peaks = indexes(y, thres=0.3, min_dist=4.0) #these values are somewhat arbitrary right now
+    peaks = indexes(y, thres=0.3, min_dist=8.0) #these values are somewhat arbitrary right now
     numPeaks1 = 0
     peak1 = [0]
     peakIndices1 = [0]
@@ -194,17 +131,6 @@ def gaussianFits(fileName, fobs):
     peakIndices2 = [0]
     peakX = x[peaks]
     peakY = y[peaks]
-    #buffer = 0
-    newRange = len(peakY)
-    negRange = len(peakY)
-    for height in peakY:
-        if height > newRange:
-            break
-        if peakY[height] < 0:
-            np.delete(peakY, height)
-            np.delete(peakX, height)
-            newRange = newRange - 1
-    print(peakX)
 
     hBisClear = False
     OIIIisClear = False
@@ -212,7 +138,6 @@ def gaussianFits(fileName, fobs):
     hAisClear = False
     NIIisClear = False
     SIIisClear = False
-    tooNoisy = False
 
     Halpha = 0
     NII = 0
@@ -220,73 +145,34 @@ def gaussianFits(fileName, fobs):
     OIII = 0
     SII = 0
     OI = 0
-    doublePeak = 0
-    hBnum = 0
-    hBsens = []
+    
     
     for i in range(len(peakX)):
-        """if peakX[i] > 6550 and peakX[i] < 6780: #H-alpha, NII, and SII
-            numPeaks2 = numPeaks2 + 1
-            peak2.append(peakX[i])
-            peakIndices2.append(i)"""
-        if peakX[i] > 6557 and peakX[i] < 6567:
+        if peakX[i] > 6500 and peakX[i] < 6780: #H-alpha, NII, and SII
             numPeaks2 = numPeaks2 + 1
             peak2.append(peakX[i])
             peakIndices2.append(i)
-            hAisClear = True
-            amphA = peakY[i]
-        if peakX[i] > 6577 and peakX[i] < 6587:
-            numPeaks2 = numPeaks2 + 1
-            peak2.append(peakX[i])
-            peakIndices2.append(i)
-            NIIisClear = True
-            ampNII = peakY[i]
-        if peakX[i] > 6710 and peakX[i] < 6740:
-            doublePeak = doublePeak + 1
-            numPeaks2 = numPeaks2 + 1
-            peak2.append(peakX[i])
-            peakIndices2.append(i)
-            SIIisClear = True
-            """if doublePeak==1:
-                ampSIIa = peakY[i]
-            elif doublePeak==2:
-                ampSIIb = peakY[i]
-                if np.abs(peakX[i] - xGuessSIIb) >= 2:
-                    xGuessSIIb = peakX[i]""" 
-        if peakX[i] > 6713 and peakX[i] < 6722:
-            ampSIIa = peakY[i]
-            print('SIIa (' + str(peakX[i]) + ', ' + str(peakY[i]) + ')')
-        if peakX[i] > 6727 and peakX[i] < 6733:
-            ampSIIb = peakY[i]
-            print('SIIb (' + str(peakX[i]) + ', ' + str(peakY[i]) + ')')
-        if peakX[i] > 6577 and peakX[i] < 6587:
-            numPeaks2 = numPeaks2 + 1
-            peak2.append(peakX[i])
-            peakIndices2.append(i)
-            NIIisClear = True
-            ampNII = peakY[i]
-        if peakX[i] > 4850 and peakX[i] < 4870: #H-beta
+            if peakX[i] > 6560 and peakX[i] < 6570:
+                hAisClear = True
+            if peakX[i] > 6575 and peakX[i] < 6590:
+                NIIisClear = True
+            if peakX[i] > 6710 and peakX[i] < 6780:
+                SIIisClear = True
+        if peakX[i] > 4850 and peakX[i] < 4880: #H-beta
             numPeaks1 = numPeaks1 + 1
-            hBnum = hBnum + 1
             peak1.append(peakX[i])
             peakIndices1.append(i)
             hBisClear = True
-            if hBnum >= 1:
-                hBsens.append(peakY[i])
-                amphB = np.amax(hBsens)
-            #amphB = peakY[i]
         if peakX[i] > 5000 and peakX[i] < 5015: #OIII
             numPeaks1 = numPeaks1 + 1
             peak1.append(peakX[i])
             peakIndices1.append(i)
             OIIIisClear = True
-            ampOIII = peakY[i]
-        if peakX[i] > 6295 and peakX[i] < 6305: #OI
+        if peakX[i] > 6290 and peakX[i] < 6310: #OI
             numPeaks1 = numPeaks1 + 1
             peak1.append(peakX[i])
             peakIndices1.append(i)
             OIisClear = True
-            ampOI = peakY[i]
     peak2.remove(0)
     peak1.remove(0)
     peakIndices2.remove(0)
@@ -298,17 +184,37 @@ def gaussianFits(fileName, fobs):
     print(peak1)
 
     #note: OI is usually so small, indexes probably won't pick it up
-    #tooNoisy = False
+    tooNoisy = False
   
-    if numPeaks1 < 1: #NOT LESS THAN TWO (gets rid of cases where H-b is visible but not O3, which happens a lot)
+    if numPeaks2==5:
+        ampNII0 = peakY[peakIndices2[0]]
+        amphA = peakY[peakIndices2[1]]
+        ampNII = peakY[peakIndices2[2]]
+        ampSIIa = peakY[peakIndices2[3]]
+        ampSIIb = peakY[peakIndices2[4]]
+    elif numPeaks2==4:
+        ampNII0 = noise #placeholder because you need to do a triple gaussian fit 
+        amphA = peakY[peakIndices2[0]]
+        ampNII = peakY[peakIndices2[1]]
+        ampSIIa = peakY[peakIndices2[2]]
+        ampSIIb = peakY[peakIndices2[3]]
+    else:
         tooNoisy = True
         print("too few peaks detected, check this spectra by hand")
+
+    if numPeaks1==2:
+        amphB = peakY[peakIndices1[0]]
+        ampOIII = peakY[peakIndices1[1]]
+        ampOI = noise #this is just a place holder for now, means that .indexes couldn't find a peak at OI
+    elif numPeaks1==3: #note! need to take care of uncertainties 
+        amphB = peakY[peakIndices1[0]]
+        ampOIII = peakY[peakIndices1[1]]
+        ampOI = peakY[peakIndices1[2]]
+
     if hAisClear==False: tooNoisy = True
-    #if SN < 13: tooNoisy = True
-    #if hBisClear==False and OIIIisClear==False: tooNoisy = True
-    #print(tooNoisy)
-    #print("LOOK HERE")
-    tooNoisy = False
+    if hBisClear==False and OIIIisClear==False: tooNoisy = True
+    #ADD MORE PARAMETERS TO THIS FLAG TO ACCOUNT FOR SPECTRA THAT ARE JUST TOO NOISY AND NOT WORTH IT
+    
     if tooNoisy==False: 
         guesshB = [amphB, 4865, width]
         guessOIII = [ampOIII, 5007, width]
@@ -318,7 +224,7 @@ def gaussianFits(fileName, fobs):
         guessSIIa = [ampSIIa, 6716, width] #6716
         guessSIIb = [ampSIIb, 6731, width] #6731
 
-        #using the least square function to optimize the paramters for the gaussian fit(the params for the func() function)
+        #using the least square function to optimize the paramters for the gaussin fit(the params for the func() function)
         
         #singular-peak gaussian fits
         optimhB, flag = sp.leastsq(errfunc, guesshB, args=(x, y))
@@ -347,7 +253,6 @@ def gaussianFits(fileName, fobs):
         yOIII = func(x, optimOIII[0], optimOIII[1], optimOIII[2])
         yOI = func(x, optimOI[0], optimOI[1], optimOI[2])
 
-        
         Hbeta = integrate.simps(yhB, x)
         OIII = integrate.simps(yOIII, x)
         OI = integrate.simps(yOI, x)
@@ -356,28 +261,12 @@ def gaussianFits(fileName, fobs):
         #SII = integrate.simps(ySIIa, x) + integrate.simps(ySIIb, x) #not sure which of these two it is (are they different?)
         SII = integrate.simps(ySII, x)
 
-        if Hbeta < 0: hBisClear = False
-        if OIII < 0: OIIIisClear = False
-        if OI < 0: OIisClear = False
-        if Halpha < 0: hAisClear = False
-        if NII < 0: NIIisClear = False
-        if SII < 0: SIIisClear = False
-
-        f = plt.figure(2, figsize=(7, 10))
-        cmfont = {'fontname':'Georgia'}
-        plt.rcParams.update(cmfont)
-        
+        f = plt.figure(2, figsize=(16,5))
         plt.clf()
         plt.xlim(4700, 7000)
         plt.grid()
         plt.tight_layout()
-        plt.title('Gaussian Fit', **cmfont)
-        #ax = f.gca()
-        #ax.set_xticks(np.arange(3700, 7700, 250))
-        plt.xlabel("wavelength (angstroms)", **cmfont)
-        plt.ylabel("flux", **cmfont)
-        plt.tight_layout()
-
+        plt.title('Gaussian Fit')
 
         plt.grid(c='k', linestyle='-', linewidth=1.0, alpha=0.25)
         plt.plot(x, y, c='k', linewidth=0.5)
@@ -393,16 +282,17 @@ def gaussianFits(fileName, fobs):
         plt.plot(x, ySIIa, c='r', lw=0.75)
         plt.plot(x, ySIIb, c='r', lw=0.75)
         
-        f.show()
+        f.savefig(outLoc + 'gaussian_fit.png', bbox_inches='tight')
         
     elif tooNoisy==True:
         print("spectrum is too noisy to analyze automatically, please check by hand")
 
     elineFluxes = namedtuple('EmLines', 'hAlpha NII hBeta OIII SII OI noise hAisClear NIIisClear hBisClear OIIIisClear SIIisClear OIisClear tooNoisy')
-    emLines = elineFluxes(Halpha, NII, Hbeta, OIII, SII, OI, noise, hAisClear, NIIisClear, hBisClear, OIIIisClear, SIIisClear, True, tooNoisy)
+    emLines = elineFluxes(Halpha, NII, Hbeta, OIII, SII, OI, noise, hAisClear, NIIisClear, hBisClear, OIIIisClear, SIIisClear, OIisClear, tooNoisy)
     return emLines #potential problem here! maybe it has to return something no matter what!
+        
 
-def BPT(emLines):
+def BPT(emLines, outLoc, isCumulative):
 
     bptNII=  ''
     bptSII = ''
@@ -420,18 +310,12 @@ def BPT(emLines):
     noise = emLines.noise
 
     hAisClear = emLines.hAisClear
-    hAClear = emLines.hAisClear
     NIIisClear = emLines.NIIisClear
-    NIIClear = emLines.NIIisClear
     hBisClear = emLines.hBisClear
-    hBClear = emLines.hBisClear
     OIIIisClear = emLines.OIIIisClear
-    OIIIClear = emLines.OIIIisClear
     SIIisClear = emLines.SIIisClear
-    SIIClear = emLines.SIIisClear
     OIisClear = emLines.OIisClear
-    OIClear = emLines.OIisClear
-
+    
     flagY = 0 #-1 is down, 1 is up
     flagX = 0 #-1 is pointing to the left, 1 is pointing to the right
     allClear = True
@@ -440,42 +324,36 @@ def BPT(emLines):
     allClearOI = True
     
     
-    if hAisClear==False and Halpha < noise: #right now there is a problem if both H-alpha and NII/SII/OI are both uncertain, same for OIII and HB
+    if hAisClear==False: #right now there is a problem if both H-alpha and NII/SII/OI are both uncertain, same for OIII and HB
         Halpha = noise   #but if H-alpha is uncertain, the spectrum is too noisy anyways 
         flagX = 1
         print("hA is uncertain")
-        hAClear = False
         allClear = False
-    if NIIisClear==False and NII < noise:
+    if NIIisClear==False:
         NII = noise
         flagX = -1
         print("NII is uncertain")
-        NIIClear = False
         allClearNII = False
-    if hBisClear==False and Hbeta < noise:
+    if hBisClear==False:
         Hbeta = noise
         flagY = 1
         print("hB is uncertain")
-        hBClear = False
         allClear = False
-    if OIIIisClear==False and OIII < noise:
+    if OIIIisClear==False:
         OIII = noise
         flagY = -1
         print("OIII is uncertain")
-        OIIIClear = False
         allClear = False
-    if SIIisClear==False and SII < noise:
+    if SIIisClear==False:
         SII = noise
         flagX = -1
         print("SII is uncertain")
-        SIIClear = False
         allClearSII = False
-    if OIisClear==False: #this one is different because OI is very small and often unclear
+    if OIisClear==False:
         OI = noise
         flagX = -1
         print("OI is uncertain")
         allClearOI = False
-        OIClear = False
         
     print("H-beta: ", Hbeta)
     print("OIII: ", OIII)
@@ -486,27 +364,23 @@ def BPT(emLines):
     print("noise: ", noise)
 
     plt.clf()
-    c, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))#3 subplots
+    c, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(6, 10))#3 subplots
     for ax in [ax1, ax2, ax3]:
-        ax.set_ylim(-0.5, 1.7)
-        ax.set_xlim(-4, 1)
+        ax.set_ylim(-3, 3)
+        ax.set_xlim(-5, 3)
         ax.grid()
-
-    cmfont = {'fontname':'Georgia'}
-    plt.rcParams.update(cmfont)
-
 
     #format and plot the delimeter equations
     xVals2 = np.arange(-10, 0.05, 0.01)
     xVals = np.arange(-10, 0.47, 0.01)
     nDelim2 = 0.61 / (xVals2 - 0.05) + 1.3
     nDelim = 0.61 / (xVals - 0.47) + 1.19
-    ax1.set_title("BPT Diagram Using NII", **cmfont)
-    ax1.set_xlabel("[NII]/H-alpha", **cmfont)
-    ax1.set_ylabel("[OIII]/H-beta", **cmfont)
-    ax1.text(-0.7, -0.4, "HII", color='b', **cmfont)
-    ax1.text(-0.3, 0, "Composite", color='b', **cmfont)
-    ax1.text(0, 0.6, "AGN", color='b', **cmfont)
+    ax1.set_title("BPT Diagram Using NII")
+    ax1.set_xlabel("[NII]/H-alpha")
+    ax1.set_ylabel("[OIII]/H-beta")
+    ax1.text(-0.6, -0.4, "HII", color='b')
+    ax1.text(-0.3, 0, "Composite", color='b')
+    ax1.text(0, 0.6, "AGN", color='b')
     ax1.plot(xVals, nDelim, c='k', dashes=[6,2])
     ax1.plot(xVals2, nDelim2, c='k')
 
@@ -537,12 +411,12 @@ def BPT(emLines):
     xS2 = np.arange(-0.315, 4, 0.01)
     sDelim = 0.72 / (xS - 0.32) + 1.3
     sDelim2 = 1.89*xS2 + 0.76 
-    ax2.set_title("BPT Diagram Using SII", **cmfont)
-    ax2.set_xlabel("[SII]/H-alpha", **cmfont)
-    ax2.set_ylabel("[OIII]/H-beta", **cmfont)
-    ax2.text(-0.5, -0.4, "HII", color='b', **cmfont)
-    ax2.text(-0.7, 0.8, "Seyfert", color='b', **cmfont)
-    ax2.text(0.2, -0.2, "LINER", color='b', **cmfont)
+    ax2.set_title("BPT Diagram Using SII")
+    ax2.set_xlabel("[SII]/H-alpha")
+    ax2.set_ylabel("[OIII]/H-beta")
+    ax2.text(-0.4, -0.4, "HII", color='b')
+    ax2.text(-0.5, 0.6, "Seyfert", color='b')
+    ax2.text(0.2, -0.2, "LINER", color='b')
     ax2.plot(xS, sDelim, c='k', dashes=[6,2])
     ax2.plot(xS2, sDelim2, c='k')
 
@@ -575,19 +449,20 @@ def BPT(emLines):
     xO2 = np.arange(-1.13, 4, 0.01)
     oDelim = 0.73 / (xO + 0.59) + 1.33
     oDelim2 = 1.18*xO2 + 1.3
-    ax3.set_title("BPT Diagram Using OI", **cmfont)
-    ax3.set_xlabel("[OI]/H-alpha", **cmfont)
-    ax3.set_ylabel("[OIII]/H-beta", **cmfont)
-    ax3.text(-1.6, -0.4, "HII", color='b', **cmfont)
-    ax3.text(-1, 0.6, "Seyfert", color='b', **cmfont)
-    ax3.text(-0.5, -0.2, "LINER", color='b', **cmfont)
+    ax3.set_title("BPT Diagram Using OI")
+    ax3.set_xlabel("[OI]/H-alpha")
+    ax3.set_ylabel("[OIII]/H-beta")
+    ax3.text(-1.6, -0.4, "HII", color='b')
+    ax3.text(-1, 0.6, "Seyfert", color='b')
+    ax3.text(-0.5, -0.2, "LINER", color='b')
     ax3.plot(xO, oDelim, c='k', dashes=[6,2])
     ax3.plot(xO2, oDelim2, c='k')
 
     colorVarOI = 'k'
     delim1OI = 0.73 / (np.log(OI/Halpha) + 0.59) + 1.33
     delim2OI = 1.18*np.log(OI/Halpha) + 1.3
-
+    print('debugging BPTs...')
+    print('x = ' + str(np.log(OI/Halpha)) + ' y = ' + str(np.log(OIII/Hbeta)))
     if np.log(OIII/Hbeta) >= delim1OI and np.log(OIII/Hbeta) >= delim2OI:
         colorVarOI = '#66ff33'
         bptOI = 'Seyfert'
@@ -598,7 +473,7 @@ def BPT(emLines):
         colorVarOI = '#ffff00'
         bptOI = 'LINER'
     elif np.log(OI/Halpha) >= -0.59 and np.log(OIII/Hbeta) < delim2SII:
-        colorfVarOI = '#ffff00'
+        colorVarOI = '#ffff00'
         bptOI = 'LINER'
     elif np.log(OIII/Hbeta) < delim1OI: #check this
         colorVarOI = 'r'
@@ -606,23 +481,122 @@ def BPT(emLines):
 
     ax3.plot(np.log(OI/Halpha), np.log(OIII/Hbeta), marker='o', c=colorVarOI, markeredgecolor=colorVarOI)
     if allClear==False or allClearOI==False: ax3.quiver(np.log(OI/Halpha), np.log(OIII/Hbeta), flagX, flagY, color=colorVarOI)
-    plt.tight_layout()
-    
-    c.show()
-    raw_input()
- 
+    #k.savefig(outLoc + 'BPT_OI.png', bbox_inches='tight')
 
+    if isCumulative==True:
+        plt.show()
+    else:
+        plt.tight_layout()
+        c.savefig(outLoc + 'BPT Diagrams', bbox_inches='tight')
+
+    #raw_input()
+
+    bptR = [bptNII, bptSII, bptOI]
+
+    return bptR
+                
+    
 def run_code():
-    reportLoc = '/Users/plira/india_temp/variable_spectra/auto/final_scripts/'
-    sampleSpec = '/Users/plira/india_temp/variable_spectra/auto/spec-0505-52317-0301_report_parsed.txt'
-    fobs = 4.617280E+01
-
-    #loadData(sampleSpec, reportLoc, fobs)
-    emLines = gaussianFits(sampleSpec, fobs)
-    BPT(emLines)
+    #grid file is going to already set up but for the future, we need to edit lines in the grid file in the loop
+    #for a first run, fill the directories with like 5 spectra of different kinds before you do them all at once, and then when you do, make sure you have a couple hours
+    #and save as you go, so that you can quit in the middle of the loop if need be 
     
+    outpath = '/Users/plira/india_temp/variable_spectra/auto/output_models/'
+    starlight = '/Users/plira/software/STARLIGHTv04/'
+    oldFile = '5339079575614451712'
+    totalFile = '/Users/plira/india_temp/variable_spectra/auto/cumulative_output.txt'
+    totalBPT = open('/Users/plira/india_temp/variable_spectra/auto/cumulative_BPT.txt', 'w')
 
+    cumulative = open(totalFile, 'w')
+    cumulative.write("{: <20} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <15} {: <15} {: <15}".format('Filename','hAlpha','NII','hBeta','OIII','SII','OI','noise','hAisClear','NIIisClear','hBisClear','OIIIisClear','SIIisClear','OIisClear','tooNoisy', 'BPT NII', 'BPT SII', 'BPT OI'))
+        
+    for filename in os.listdir('/Users/plira/india_temp/variable_spectra/auto/temp_input'): #right now, this directory has the models, but eventually it will just have raw data
+        print('filename: ' + filename)
+        base = filename[:-4]
+        print("base: " + base)
+        #you are so fucking good
+        #temporarily commenting out starlight
+        grid = '/Users/plira/software/STARLIGHTv04/grid_temp.in'
+        for line in fileinput.input([grid], inplace=True):
+            line = line.replace(oldFile, base)
+            sys.stdout.write(line)
+
+        os.chdir(starlight)
+        call(["pwd"])
+        os.system("./Starlight_v04_Mac.exe < grid_auto.in") #:)"""
+        #the way this is set up, if you just comment out the STARLIGHT section, it should run without running starlight? check that to be sure
+        
+        fobs = parse_datafile(base, filename)
+        locI = outpath + base + '/'
+        locO = '/Users/plira/india_temp/variable_spectra/auto/temp_input/' + filename
+        fileOut = open(locI + 'analysis output', 'w')
+        print("locI: " + locI)
+        shutil.copy2(locO, locI)
+        shutil.copy2('/Users/plira/india_temp/variable_spectra/auto/temp_out/'+base+'_output.txt', locI)
+        loc = outpath + base + '/' + base + '_parsed.txt' #this is the PARSED model that gets passed
+        emLines = gaussianFits(loc, fobs, locI);
+        output = [base, emLines.hAlpha, emLines.NII, emLines.hBeta, emLines.OIII, emLines.SII, emLines.OI, emLines.noise, emLines.hAisClear, emLines.NIIisClear, emLines.hBisClear, emLines.OIIIisClear, emLines.SIIisClear, emLines.OIisClear, emLines.tooNoisy]
+        cumulative.write("\n{: <20} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format(output[0], output[1], output[2], output[3], output[4], output[5], output[6], output[7], output[8], output[9], output[10], output[11], output[12], output[13], output[14]))
+
+        fileOut.write('Filename: '+ output[0])
+        fileOut.write('\n ')
+        fileOut.write("\n{: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15}".format('hAlpha','NII','hBeta','OIII','SII', 'OI', 'noise'))
+        fileOut.write("\n{: <15} {: <15} {: <15} {: <15} {: <15} {: <15} {: <15}".format(output[1], output[2], output[3], output[4], output[5], output[6], output[7]))
+        fileOut.write('\n ')
+        fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format('hAisClear','NIIisClear','hBisClear','OIIIisClear','SIIisClear','OIisClear','tooNoisy'))
+        fileOut.write("\n{: <10} {: <10} {: <10} {: <10} {: <10} {: <10} {: <10}".format(output[8], output[9], output[10], output[11], output[12], output[13], output[14]))        
+
+        if emLines.tooNoisy==False:
+            bptO = BPT(emLines, locI, False)
+            fileOut.write('\n ')
+            fileOut.write("\n{: <15} {: <15} {: <15}".format('BPT NII', 'BPT SII', 'BPT OI'))
+            fileOut.write("\n{: <15} {: <15} {: <15}".format(bptO[0], bptO[1], bptO[2]))
+            cumulative.write("{: <15} {: <15} {: <15}".format(bptO[0], bptO[1], bptO[2]))
+            totalBPT.write('\n'+ str(output[0]) + ',' + str(output[1]) + ',' + str(output[2]) + ',' + str(output[3]) + ',' + str(output[4]) + ',' + str(output[5]) + ',' + str(output[6]) + ',' + str(output[7]) + ',' + str(output[8]) + ',' + str(output[9]) + ',' + str(output[10]) + ',' + str(output[11]) + ',' + str(output[12]) + ',' + str(output[13]) + ',' + str(output[14]))
+
+            #put dynamic plot animation here!
+        elif emLines.tooNoisy==True:
+            notWorthIt = open(locI + 'ErrorMessage_noisy_spectrum', 'w')
+            notWorthIt.write('spectrum was too noisy, please inspect file ' + base + '.txt by hand')
+            notWorthIt.close()
+
+        fileOut.close()
+        oldFile = base
+        print("oldFile: " + oldFile)
+
+    cumulative.close()
+    totalBPT.close()
+
+    #holy shit this works
 
 
 if __name__ == '__main__':
     run_code()
+
+#ok game plan - first of all, you did a fucking amazing job today
+#right now as is, this works
+#tomorrow, you need to try and get the executable file with starlight working and figure out how to parse into and edit the grid file
+#also, right now the arrows in BPT diagrams don't mean much and uncertainty in general needs work
+#specifically and importantly, you need to have a cop-out flag for those spectra that are just so noisy you're just going to get crazy data if you try to analyze
+#maybe consider implementing a small S/N calculation - otherwise just use the uncertainty flags you already have 
+#you also need to make sure you have a file keeping track of the spectra as you go
+#and forget the spobjid, you decided to jst change your filename system
+
+#ALSO you need to find a way to save the graphs as you go, or run them individualy (could just change the path) but would be easier to save the graphs as you go 
+
+
+
+#game plan pt 2
+#ANOTHER crazy productive day, so proud of you
+#almost everything is ready, now you're working on graphing the cumulative BPT diagram results (need to have a way for the function to skip over
+#the files we said were too noisy
+#you're kick ass I love it
+#also maybe try your automated fit against one of the handmade ones and see how they compare!
+#test a file of like 5 before all of them at once
+#also maybe print out a lot of analysis and put it in a text file so you have a little more detailed info for each? 
+#also want to be able to return some statistics on your runs, so be able to see automatically where a point falls
+
+#need to catch runtime warnings and figure out why it wants you to press enter in btw valid runs - rawinput?
+
+#MAKE BPTS SUBPLOTS AND STILL FIXING CUMULATIVE THING
+#ideas from last night - color code with if greater than statements, save properly fitted BPT subplots 
